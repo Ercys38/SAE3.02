@@ -1,0 +1,7 @@
+# Aucune dependance exterieure.
+# Tout le projet utilise la bibliotheque standard de Python :
+# tkinter pour la fenetre, threading et queue pour les threads,
+# sqlite3 pour la base, heapq pour Dijkstra.
+#
+# Sous Linux, tkinter est parfois dans un paquet separe :
+#   sudo apt install python3-tk

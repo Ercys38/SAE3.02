@@ -47,21 +47,20 @@ Fait :
 | `simulation/vehicule.py` | deplacement d'une voiture, files, deboitement |
 | `simulation/simulation.py` | etat global, index `Trafic`, densite |
 | `simulation/affichage.py` | fenetre tkinter |
+| `simulation/itineraire.py` | Dijkstra sur le graphe, cout personnalisable |
 | `main.py` | point d'entree |
 
 A ecrire :
 
 | Fichier | Role | Etape |
 |---|---|---|
-| `simulation/itineraire.py` | Dijkstra sur le graphe | 3 |
 | `simulation/secours.py` | le vehicule prioritaire | 3 |
 | `simulation/messages.py` | format des messages echanges | 4 |
 | `simulation/reseau.py` | sockets client / serveur | 4 |
 | `simulation/base.py` | enregistrement des simulations en SQLite | 5 |
 | `superviseur.py` | point d'entree du poste central, sur la VM 1 | 4 |
 
-Commencer par `itineraire.py` : il ne depend que de `ville.py` et se teste
-sans rien afficher.
+Prochain fichier : `secours.py`, qui s'appuie sur `itineraire.py`.
 
 ## Decisions prises, et pourquoi
 

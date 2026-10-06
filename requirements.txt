@@ -1,0 +1,5 @@
+# Aucune dependance exterieure : tout vient de la bibliotheque standard
+# de Python (tkinter, threading, queue, sqlite3, json, unittest).
+#
+# Sous Debian, tkinter est dans un paquet separe :
+#   sudo apt install python3-tk

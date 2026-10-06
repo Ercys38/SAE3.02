@@ -3,6 +3,7 @@ import random
 from . import ville
 from .feux import Feu
 from . import vehicule
+from . import secours
 from .vehicule import Vehicule, LONGUEUR_VOITURE
 
 MAX_VEHICULES = 50
@@ -28,8 +29,10 @@ def liberer_le_carrefour(mouvements, occupants, carrefour, identifiant):
 
 
 class Trafic:
-    def __init__(self, vehicules, feux, mouvements, occupants):
+    def __init__(self, vehicules, feux, mouvements, occupants,
+                 priorite_active=True):
         self.feux = feux
+        self.priorite_active = priorite_active
         self.mouvements = mouvements
         self.occupants = occupants
 
@@ -116,9 +119,16 @@ class Simulation:
         self.occupants = {}
         self.densite = DENSITE_PAR_DEFAUT
         self.temps = 0.0
+        self.priorite_active = True
 
     def avancer(self, dt):
         self.temps = self.temps + dt
+
+        if self.priorite_active:
+            secours.alerter_les_feux(self.vehicules, self.feux)
+        else:
+            for carrefour in self.feux:
+                self.feux[carrefour].priorite = None
 
         for feu in self.feux.values():
             feu.avancer(dt)
@@ -126,7 +136,7 @@ class Simulation:
         self.ajuster_le_nombre_de_vehicules()
 
         trafic = Trafic(self.vehicules, self.feux, self.mouvements,
-                        self.occupants)
+                        self.occupants, self.priorite_active)
         for vehicule in self.vehicules:
             vehicule.mise_a_jour(trafic, dt)
 
@@ -146,6 +156,31 @@ class Simulation:
         liberer_le_carrefour(self.mouvements, self.occupants,
                              carrefour, identifiant)
 
+    def entree_libre(self, depuis, vers):
+        for v in self.vehicules:
+            if (v.depuis, v.vers, v.voie) != (depuis, vers, 0):
+                continue
+            if v.avance < 4 * LONGUEUR_VOITURE:
+                return False
+        return True
+
+    def lancer_un_secours(self, depuis=None):
+        if depuis is None:
+            candidats = ville.entrees()
+            random.shuffle(candidats)
+        else:
+            candidats = [depuis]
+
+        for entree in candidats:
+            vers = ville.voisins(entree)[0]
+            if not self.entree_libre(entree, vers):
+                continue
+            vehicule_secours = secours.Secours(entree, vers, 0.0, 0)
+            self.vehicules.append(vehicule_secours)
+            return vehicule_secours
+
+        return None
+
     def regler_la_vitesse(self, kmh):
         vehicule.LIMITES["avenue"] = kmh / 3.6
         vehicule.LIMITES["rue"] = kmh * 0.6 / 3.6
@@ -153,16 +188,25 @@ class Simulation:
     def nombre_vise(self):
         return int(MAX_VEHICULES * self.densite / 100)
 
+    def civils(self):
+        liste = []
+        for v in self.vehicules:
+            if not v.prioritaire:
+                liste.append(v)
+        return liste
+
     def ajuster_le_nombre_de_vehicules(self):
         vise = self.nombre_vise()
+        civils = self.civils()
 
-        if len(self.vehicules) < vise:
+        if len(civils) < vise:
             nouveau = self.creer_un_vehicule()
             if nouveau is not None:
                 self.vehicules.append(nouveau)
 
-        elif len(self.vehicules) > vise:
-            partant = self.vehicules.pop()
+        elif len(civils) > vise:
+            partant = civils[-1]
+            self.vehicules.remove(partant)
             if partant.reservation is not None:
                 self.liberer(partant.reservation, partant.id)
 

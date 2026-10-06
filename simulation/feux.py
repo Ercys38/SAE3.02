@@ -15,13 +15,22 @@ class Feu:
         self.priorite = None
 
     def avancer(self, dt):
+        self.temps = self.temps + dt
+
+        if self.priorite is not None and self.priorite != self.axe_passant:
+            if self.etat == VERT:
+                self.etat = ORANGE
+                self.temps = 0.0
+            elif self.etat == ORANGE and self.temps >= DUREE_ORANGE:
+                self.axe_passant = self.priorite
+                self.etat = VERT
+                self.temps = 0.0
+            return
+
         if self.priorite is not None:
-            self.axe_passant = self.priorite
             self.etat = VERT
             self.temps = 0.0
             return
-
-        self.temps = self.temps + dt
 
         if self.etat == VERT and self.temps >= DUREE_VERT:
             self.etat = ORANGE

@@ -4,7 +4,7 @@ import unittest
 from simulation.simulation import Simulation
 from simulation.vehicule import LONGUEUR_VOITURE, LARGEUR_VOITURE
 
-ECHELLE = 0.9
+ECHELLE = 2.0
 LONGUEUR = LONGUEUR_VOITURE * ECHELLE
 LARGEUR = LARGEUR_VOITURE * ECHELLE
 
@@ -41,10 +41,18 @@ def se_chevauchent(a, b):
     return True
 
 
-def compter_les_chevauchements(densite, duree=DUREE, graine=3):
+def compter_les_chevauchements(densite, duree=DUREE, graine=3, secours=False):
     random.seed(graine)
     simulation = Simulation()
     simulation.densite = densite
+
+    if secours:
+        for i in range(int(20 / PAS)):
+            simulation.avancer(PAS)
+        appele = None
+        while appele is None:
+            simulation.avancer(PAS)
+            appele = simulation.lancer_un_secours()
 
     total = 0
     portee = LONGUEUR + LARGEUR
@@ -74,6 +82,15 @@ class TestGeometrie(unittest.TestCase):
         for densite in (40, 70, 100):
             with self.subTest(densite=densite):
                 self.assertEqual(compter_les_chevauchements(densite), 0)
+
+    def test_aucun_chevauchement_avec_un_secours(self):
+        for densite in (40, 100):
+            for graine in (1, 2, 3):
+                with self.subTest(densite=densite, graine=graine):
+                    total = compter_les_chevauchements(densite, duree=70,
+                                                       graine=graine,
+                                                       secours=True)
+                    self.assertEqual(total, 0)
 
 
 if __name__ == "__main__":

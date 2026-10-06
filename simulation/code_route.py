@@ -4,7 +4,8 @@ DISTANCE_VIGILANCE = 45.0
 DUREE_STOP = 1.5
 BLOCAGE_MAX = 6.0
 RAYON_CARREFOUR = 18.0
-ECART_TRAJECTOIRES = 7.5
+ECART_TRAJECTOIRES = 11.0
+COSINUS_PARALLELE = 0.95
 
 
 def passage_autorise(vehicule, trafic):
@@ -45,9 +46,29 @@ def trajectoires_compatibles(vehicule, trafic):
         if autre == mien:
             continue
         autre_segment = trajet_dans_le_carrefour(vehicule.vers, autre)
+
+        if paralleles(segment_mien, autre_segment):
+            if not se_croisent(segment_mien, autre_segment):
+                continue
+
         if distance_entre_segments(segment_mien, autre_segment) < ECART_TRAJECTOIRES:
             return False
     return True
+
+
+def paralleles(premier, second):
+    ax = premier[1][0] - premier[0][0]
+    ay = premier[1][1] - premier[0][1]
+    bx = second[1][0] - second[0][0]
+    by = second[1][1] - second[0][1]
+
+    na = (ax * ax + ay * ay) ** 0.5
+    nb = (bx * bx + by * by) ** 0.5
+    if na < 0.001 or nb < 0.001:
+        return False
+
+    cosinus = (ax * bx + ay * by) / (na * nb)
+    return abs(cosinus) > COSINUS_PARALLELE
 
 
 def trajet_dans_le_carrefour(carrefour, mouvement):

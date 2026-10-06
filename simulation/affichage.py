@@ -5,8 +5,9 @@ from . import ville
 from .feux import VERT, ORANGE, ROUGE
 from .vehicule import LONGUEUR_VOITURE, LARGEUR_VOITURE
 
-ECHELLE = 0.9
-MARGE = 50
+ECHELLE = 2.0
+MARGE = 30
+TAILLE_FENETRE = 620
 PERIODE = 33
 VITESSE_MAX = 5
 
@@ -29,32 +30,45 @@ ROUGE_PANNEAU = "#c8372f"
 BLANC = "#fafafa"
 
 
+def carrefour_principal():
+    for nom in ville.CARREFOURS:
+        if ville.CARREFOURS[nom]["principal"]:
+            return nom
+    return list(ville.CARREFOURS)[0]
+
+
+CENTRE = ville.position(carrefour_principal())
+
+
 def en_pixels(position):
     x, y = position
-    return (x * ECHELLE + MARGE, y * ECHELLE + MARGE)
+    return ((x - CENTRE[0]) * ECHELLE + TAILLE_FENETRE / 2,
+            (y - CENTRE[1]) * ECHELLE + TAILLE_FENETRE / 2)
 
 
 class Fenetre:
     def __init__(self, simulation):
         self.simulation = simulation
         self.facteur = 1
+        self.secours = None
+        self.appel_en_attente = False
 
-        largeur_m, hauteur_m = ville.taille_ville()
-        self.largeur = int(largeur_m * ECHELLE) + 2 * MARGE
-        self.hauteur = int(hauteur_m * ECHELLE) + 2 * MARGE
+        self.largeur = TAILLE_FENETRE
+        self.hauteur = TAILLE_FENETRE
 
         self.racine = tk.Tk()
         self.racine.title("SAE R3.02 - carrefour connecte")
         self.racine.resizable(False, False)
+
+        self.construire_les_commandes()
 
         self.toile = tk.Canvas(self.racine, width=self.largeur,
                                height=self.hauteur, background=FOND,
                                highlightthickness=0)
         self.toile.pack()
 
-        self.construire_les_commandes()
-
         self.dessiner_les_rues()
+        self.dessiner_les_fleches()
         self.dessiner_les_noms()
         self.dessiner_les_carrefours()
         self.dessiner_les_panneaux()
@@ -123,6 +137,23 @@ class Fenetre:
         self.etiquette_limite = tk.Label(barre3, text="", width=8, anchor="w")
         self.etiquette_limite.pack(side="left")
 
+        barre4 = tk.Frame(self.racine)
+        barre4.pack(fill="x", padx=MARGE - 10, pady=(0, 8))
+
+        self.bouton_secours = tk.Button(barre4,
+                                        text="Appeler un vehicule de secours",
+                                        command=self.appeler_les_secours)
+        self.bouton_secours.pack(side="left")
+
+        self.case_priorite = tk.IntVar(value=1)
+        case = tk.Checkbutton(barre4, text="Priorite aux feux",
+                              variable=self.case_priorite,
+                              command=self.changer_priorite)
+        case.pack(side="left", padx=10)
+
+        self.etiquette_secours = tk.Label(barre4, text="", anchor="w")
+        self.etiquette_secours.pack(side="left", padx=10)
+
         self.changer_densite(self.simulation.densite)
         self.changer_vitesse(1)
         self.changer_limite(50)
@@ -138,6 +169,12 @@ class Fenetre:
     def changer_limite(self, valeur):
         self.simulation.regler_la_vitesse(int(valeur))
         self.etiquette_limite.configure(text=str(int(valeur)) + " km/h")
+
+    def changer_priorite(self):
+        self.simulation.priorite_active = self.case_priorite.get() == 1
+
+    def appeler_les_secours(self):
+        self.appel_en_attente = True
 
     def dessiner_les_rues(self):
         for categorie in ("rue", "avenue"):
@@ -179,42 +216,88 @@ class Fenetre:
                                        fill=BANDE, width=1.1, dash=(5, 6))
 
     def dessiner_les_noms(self):
+        centre = carrefour_principal()
+        xc, yc = ville.position(centre)
         deja_ecrits = []
+
         for depart, arrivee, nom, cat in ville.RUES:
             if nom in deja_ecrits:
                 continue
             deja_ecrits.append(nom)
 
-            x1, y1 = en_pixels(ville.position(depart))
-            x2, y2 = en_pixels(ville.position(arrivee))
-            mx = (x1 + x2) / 2
-            my = (y1 + y2) / 2
+            if depart == centre:
+                bout = arrivee
+            else:
+                bout = depart
+
+            xb, yb = ville.position(bout)
+            d = ((xb - xc) ** 2 + (yb - yc) ** 2) ** 0.5
+            if d < 1:
+                d = 1
+            ux = (xb - xc) / d
+            uy = (yb - yc) / d
+
+            x, y = en_pixels((xc + ux * 110, yc + uy * 110))
 
             if cat == "avenue":
                 couleur = TEXTE
-                taille = 7
-                ecart = 17
+                taille = 9
             else:
                 couleur = TEXTE_PETIT
-                taille = 6
-                ecart = 12
+                taille = 8
 
             if ville.axe(depart, arrivee) == "horizontal":
-                self.toile.create_text(mx, my - ecart, text=nom, fill=couleur,
+                self.toile.create_text(x, y - 34, text=nom, fill=couleur,
                                        font=("TkDefaultFont", taille))
             else:
-                self.toile.create_text(mx - ecart, my, text=nom, fill=couleur,
+                self.toile.create_text(x - 34, y, text=nom, fill=couleur,
                                        font=("TkDefaultFont", taille),
                                        angle=90)
+
+    def dessiner_les_fleches(self):
+        centre = carrefour_principal()
+        xc, yc = ville.position(centre)
+
+        for voisin in ville.voisins(centre):
+            xv, yv = ville.position(voisin)
+            d = ((xv - xc) ** 2 + (yv - yc) ** 2) ** 0.5
+            if d < 1:
+                d = 1
+            ux = (xv - xc) / d
+            uy = (yv - yc) / d
+            droite_x = uy
+            droite_y = -ux
+
+            for voie in range(ville.voies(voisin, centre)):
+                ecart = ville.decalage_voie(voisin, centre, voie)
+
+                base = (xc + ux * 64 + droite_x * ecart,
+                        yc + uy * 64 + droite_y * ecart)
+                corps = (xc + ux * 44 + droite_x * ecart,
+                         yc + uy * 44 + droite_y * ecart)
+                pointe = (xc + ux * 34 + droite_x * ecart,
+                          yc + uy * 34 + droite_y * ecart)
+                gauche = (corps[0] + droite_x * 4.0, corps[1] + droite_y * 4.0)
+                droite = (corps[0] - droite_x * 4.0, corps[1] - droite_y * 4.0)
+
+                x1, y1 = en_pixels(base)
+                x2, y2 = en_pixels(corps)
+                self.toile.create_line(x1, y1, x2, y2, fill=BANDE, width=3)
+
+                xp, yp = en_pixels(pointe)
+                xg, yg = en_pixels(gauche)
+                xd, yd = en_pixels(droite)
+                self.toile.create_polygon(xp, yp, xg, yg, xd, yd, fill=BANDE)
 
     def dessiner_les_carrefours(self):
         for nom in ville.CARREFOURS:
             x, y = en_pixels(ville.position(nom))
             if ville.CARREFOURS[nom]["principal"]:
-                c = 10
+                c = ville.LARGEUR_VOIE * ECHELLE * 2
                 self.toile.create_rectangle(x - c, y - c, x + c, y + c,
                                             fill=CARREFOUR, outline="")
-                self.toile.create_text(x + 15, y - 9, text=nom, fill=TEXTE,
+                self.toile.create_text(x + c + 8, y - c, text=nom,
+                                       fill=TEXTE,
                                        font=("TkDefaultFont", 8, "bold"))
             else:
                 c = 5
@@ -284,6 +367,23 @@ class Fenetre:
         texte = (str(len(self.simulation.vehicules)) + " voitures   |   "
                  + "temps ecoule : " + str(int(self.simulation.temps)) + " s")
         self.toile.itemconfigure(self.etiquette_bas, text=texte)
+
+        if self.appel_en_attente:
+            nouveau = self.simulation.lancer_un_secours()
+            if nouveau is not None:
+                self.secours = nouveau
+                self.appel_en_attente = False
+
+        if self.secours is None:
+            self.etiquette_secours.configure(text="")
+        elif self.secours.sorti:
+            self.etiquette_secours.configure(
+                text="trajet termine en "
+                     + str(round(self.secours.temps_de_trajet, 1)) + " s")
+        else:
+            self.etiquette_secours.configure(
+                text="secours en route : "
+                     + str(round(self.secours.temps_de_trajet, 1)) + " s")
 
     def rafraichir_les_vehicules(self):
         vehicules = self.simulation.vehicules

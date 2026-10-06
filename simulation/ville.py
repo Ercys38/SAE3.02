@@ -1,11 +1,11 @@
 LARGEUR_VOIE = 8.0
 
 CARREFOURS = {
-    "C": {"pos": (400, 400), "feux": True, "principal": True},
-    "O": {"pos": (0, 400), "feux": False, "principal": False},
-    "E": {"pos": (800, 400), "feux": False, "principal": False},
-    "N": {"pos": (400, 0), "feux": False, "principal": False},
-    "S": {"pos": (400, 800), "feux": False, "principal": False},
+    "C": {"pos": (150, 150), "feux": True, "principal": True},
+    "O": {"pos": (0, 150), "feux": False, "principal": False},
+    "E": {"pos": (300, 150), "feux": False, "principal": False},
+    "N": {"pos": (150, 0), "feux": False, "principal": False},
+    "S": {"pos": (150, 300), "feux": False, "principal": False},
 }
 
 RUES = [
@@ -99,6 +99,34 @@ def axe(depart, arrivee):
     if abs(x2 - x1) > abs(y2 - y1):
         return "horizontal"
     return "vertical"
+
+
+def genre_de_mouvement(precedent, carrefour, suivant):
+    x0, y0 = position(precedent)
+    x1, y1 = position(carrefour)
+    x2, y2 = position(suivant)
+
+    ux = x1 - x0
+    uy = y1 - y0
+    d = (ux * ux + uy * uy) ** 0.5
+    if d < 0.001:
+        d = 0.001
+    ux = ux / d
+    uy = uy / d
+
+    vx = x2 - x1
+    vy = y2 - y1
+    d = (vx * vx + vy * vy) ** 0.5
+    if d < 0.001:
+        d = 0.001
+    vx = vx / d
+    vy = vy / d
+
+    if ux * vx + uy * vy > 0.5:
+        return "tout_droit"
+    if ux * vy - uy * vx > 0:
+        return "droite"
+    return "gauche"
 
 
 def taille_ville():

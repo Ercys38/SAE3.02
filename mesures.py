@@ -4,8 +4,9 @@ from simulation.simulation import Simulation
 
 PAS = 0.033
 CHAUFFE = 30
-LIMITE = 300
+LIMITE = 450
 ESSAIS = 8
+ITINERAIRE = ["O", "C1", "C2", "C3", "C4", "C5", "C6", "E"]
 
 
 def un_trajet(priorite_active, densite, graine):
@@ -20,7 +21,7 @@ def un_trajet(priorite_active, densite, graine):
     secours = None
     while secours is None:
         simulation.avancer(PAS)
-        secours = simulation.lancer_un_secours("N")
+        secours = simulation.lancer_un_secours(itineraire=ITINERAIRE)
 
     for i in range(int(LIMITE / PAS)):
         simulation.avancer(PAS)
@@ -49,7 +50,7 @@ def mesurer(densite):
 
 def main():
     print("Temps de traversee du vehicule de secours")
-    print("Moyenne sur " + str(ESSAIS) + " trajets, entree par le nord")
+    print("Moyenne sur " + str(ESSAIS) + " trajets, O vers E (1,1 km, 6 carrefours)")
     print("")
     print("densite   sans priorite   avec priorite   gain")
 

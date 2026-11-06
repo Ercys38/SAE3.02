@@ -3,7 +3,7 @@ ORANGE = "orange"
 ROUGE = "rouge"
 
 DUREE_VERT = 12.0
-DUREE_ORANGE = 3.0
+DUREE_ORANGE = 4.0
 
 
 class Feu:

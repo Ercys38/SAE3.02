@@ -9,8 +9,14 @@ from simulation.vehicule import LONGUEUR_VOITURE
 PAS = 0.033
 DUREE = 180
 
+RESULTATS = {}
+
 
 def faire_tourner(densite, duree=DUREE, graine=42):
+    cle = (densite, duree, graine)
+    if cle in RESULTATS:
+        return RESULTATS[cle]
+
     random.seed(graine)
     simulation = Simulation()
     simulation.densite = densite
@@ -56,24 +62,25 @@ def faire_tourner(densite, duree=DUREE, graine=42):
                                                                   cles[i])
                     second = code_route.trajet_dans_le_carrefour(carrefour,
                                                                  cles[j])
-                    if code_route.se_croisent(premier, second):
+                    if code_route.trajets_se_croisent(premier, second):
                         anomalies["conflit"] = anomalies["conflit"] + 1
 
         par_file = {}
         for v in simulation.vehicules:
-            cle = (v.depuis, v.vers, v.voie)
-            if cle not in par_file:
-                par_file[cle] = []
-            par_file[cle].append(v.avance)
+            cle_file = (v.depuis, v.vers, v.voie)
+            if cle_file not in par_file:
+                par_file[cle_file] = []
+            par_file[cle_file].append(v.avance)
 
-        for cle in par_file:
-            positions = par_file[cle]
+        for cle_file in par_file:
+            positions = par_file[cle_file]
             positions.sort()
             for i in range(len(positions) - 1):
                 if positions[i + 1] - positions[i] < LONGUEUR_VOITURE * 0.8:
                     anomalies["collision"] = anomalies["collision"] + 1
 
-    return simulation, anomalies
+    RESULTATS[cle] = (simulation, anomalies)
+    return RESULTATS[cle]
 
 
 class TestCirculation(unittest.TestCase):
@@ -107,7 +114,3 @@ class TestCirculation(unittest.TestCase):
         simulation, anomalies = faire_tourner(40, duree=60)
         ecart = abs(len(simulation.vehicules) - simulation.nombre_vise())
         self.assertLessEqual(ecart, 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

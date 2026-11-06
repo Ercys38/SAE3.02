@@ -13,7 +13,8 @@ FREINAGE = 4.0
 LONGUEUR_VOITURE = 10.0
 LARGEUR_VOITURE = 4.0
 ECART_MINIMUM = 4.0
-RECUL_CARREFOUR = 24.0
+RECUL_CARREFOUR = 30.0
+MARGE_ARRET = 14.0
 PLACE_DE_SORTIE = 24.0
 SURCOUT_VIRAGE = 16.0
 ZONE_DECISION = 66.0
@@ -23,6 +24,7 @@ ABANDON_RESERVATION = 4.0
 DISTANCE_RABATTEMENT = 120.0
 DISTANCE_SIRENE = 40.0
 DISTANCE_PRIORITE = 90.0
+ZONE_DEGAGEMENT = 35.0
 RETOUR_SECOURS = 25.0
 VITESSE_DEPORT = 3.0
 DEPORT_DROITE = 5.5
@@ -38,6 +40,30 @@ def distance(premier, second):
     dx = second[0] - premier[0]
     dy = second[1] - premier[1]
     return (dx * dx + dy * dy) ** 0.5
+
+
+def longueur_polyligne(points):
+    total = 0.0
+    for i in range(len(points) - 1):
+        total = total + distance(points[i], points[i + 1])
+    return total
+
+
+def place_sur_polyligne(points, part):
+    vise = part * longueur_polyligne(points)
+    if vise < 0:
+        vise = 0.0
+
+    parcouru = 0.0
+    for i in range(len(points) - 1):
+        morceau = distance(points[i], points[i + 1])
+        if morceau < 0.001:
+            continue
+        if parcouru + morceau >= vise:
+            return (i, (vise - parcouru) / morceau)
+        parcouru = parcouru + morceau
+
+    return (len(points) - 2, 1.0)
 
 
 def vitesse_permise(distance, marge):
@@ -84,6 +110,10 @@ class Vehicule:
     def reste(self):
         return self.longueur_rue - self.avance
 
+    def recul_du_carrefour(self):
+        recul = code_route.rayon_du_carrefour(self.vers) + MARGE_ARRET
+        return max(recul, RECUL_CARREFOUR)
+
     def mouvement(self):
         return (self.depuis, self.voie, self.suivant, self.voie_apres())
 
@@ -91,39 +121,55 @@ class Vehicule:
         return min(self.voie, ville.voies(self.vers, self.suivant) - 1)
 
     def passage_carrefour(self):
-        rayon = code_route.RAYON_CARREFOUR
+        if not ville.est_une_sortie(self.vers):
+            rayon = code_route.rayon_du_carrefour(self.vers)
+            if self.reste < rayon:
+                mouvement = (self.depuis, self.voie,
+                             self.suivant, self.voie_apres())
+                trajet = code_route.trajet_dans_le_carrefour(
+                    self.vers, mouvement, rayon)
+                part = (rayon - self.reste) / (2 * rayon)
+                return (trajet, part, rayon)
 
-        if self.reste < rayon and not ville.est_une_sortie(self.vers):
-            carrefour = self.vers
-            entree = self.depuis
-            sortie = self.suivant
-            depart = code_route.point_de_file(entree, carrefour,
-                                              self.voie, False)
-            arrivee = code_route.point_de_file(sortie, carrefour,
-                                               self.voie_apres(), True)
-            part = (rayon - self.reste) / (2 * rayon)
-        elif self.precedent is not None and self.avance < rayon:
-            carrefour = self.depuis
-            entree = self.precedent
-            sortie = self.vers
-            depart = code_route.point_de_file(entree, carrefour,
-                                              self.voie_entree, False)
-            arrivee = code_route.point_de_file(sortie, carrefour,
-                                               self.voie, True)
-            part = (rayon + self.avance) / (2 * rayon)
-        else:
+        if self.precedent is not None:
+            rayon = code_route.rayon_du_carrefour(self.depuis)
+            if self.avance < rayon:
+                mouvement = (self.precedent, self.voie_entree,
+                             self.vers, self.voie)
+                trajet = code_route.trajet_dans_le_carrefour(
+                    self.depuis, mouvement, rayon)
+                part = (rayon + self.avance) / (2 * rayon)
+                return (trajet, part, rayon)
+
+        return None
+
+    def point_du_passage(self, passage):
+        trajet, part, rayon = passage
+        i, dedans = place_sur_polyligne(trajet, part)
+        a = trajet[i]
+        b = trajet[i + 1]
+        return (a[0] + (b[0] - a[0]) * dedans,
+                a[1] + (b[1] - a[1]) * dedans)
+
+    def tangente_du_passage(self, passage):
+        trajet, part, rayon = passage
+        i, dedans = place_sur_polyligne(trajet, part)
+        a = trajet[i]
+        b = trajet[i + 1]
+
+        d = distance(a, b)
+        if d < 0.001:
             return None
-
-        return (depart, arrivee, part)
+        return ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
 
     def retard_carrefour(self):
         passage = self.passage_carrefour()
         if passage is None:
             return 0.0
 
-        depart, arrivee, part = passage
-        chemin = distance(depart, arrivee)
-        modele = 2 * code_route.RAYON_CARREFOUR
+        trajet, part, rayon = passage
+        chemin = longueur_polyligne(trajet)
+        modele = 2 * rayon
         if chemin > modele:
             return 0.0
         return part * (modele - chemin)
@@ -131,50 +177,37 @@ class Vehicule:
     def direction(self):
         passage = self.passage_carrefour()
         if passage is not None:
-            depart, arrivee, part = passage
-            dx = arrivee[0] - depart[0]
-            dy = arrivee[1] - depart[1]
-            d = (dx * dx + dy * dy) ** 0.5
-            if d > 0.001:
-                return (dx / d, dy / d)
+            tangente = self.tangente_du_passage(passage)
+            if tangente is not None:
+                return tangente
 
-        x1, y1 = ville.position(self.depuis)
-        x2, y2 = ville.position(self.vers)
-        d = self.longueur_rue
-        dx = (x2 - x1) / d
-        dy = (y2 - y1) / d
+        dx, dy = ville.tangente_rue(self.depuis, self.vers, 0.0)
 
-        if abs(self.vitesse_laterale) > 0.01:
-            penche = self.vitesse_laterale * ANGLE_DEPORT
-            if penche > ANGLE_DEPORT:
-                penche = ANGLE_DEPORT
-            if penche < -ANGLE_DEPORT:
-                penche = -ANGLE_DEPORT
-            ex = dx - dy * penche
-            ey = dy + dx * penche
-            norme = (ex * ex + ey * ey) ** 0.5
-            if norme > 0.001:
-                return (ex / norme, ey / norme)
+        if abs(self.vitesse_laterale) < 0.01:
+            return (dx, dy)
 
-        return (dx, dy)
+        penche = self.vitesse_laterale * ANGLE_DEPORT
+        penche = min(max(penche, -ANGLE_DEPORT), ANGLE_DEPORT)
+
+        ex = dx - dy * penche
+        ey = dy + dx * penche
+        norme = (ex * ex + ey * ey) ** 0.5
+        if norme < 0.001:
+            return (dx, dy)
+        return (ex / norme, ey / norme)
 
     def position(self):
         passage = self.passage_carrefour()
         if passage is not None:
-            depart, arrivee, part = passage
-            x = depart[0] + (arrivee[0] - depart[0]) * part
-            y = depart[1] + (arrivee[1] - depart[1]) * part
+            x, y = self.point_du_passage(passage)
             if abs(self.ecart_urgence) > 0.01:
                 dx, dy = self.direction()
                 x = x - dy * self.ecart_urgence
                 y = y + dx * self.ecart_urgence
             return (x, y)
 
-        x1, y1 = ville.position(self.depuis)
-        x2, y2 = ville.position(self.vers)
         part = self.avance / self.longueur_rue
-        x = x1 + (x2 - x1) * part
-        y = y1 + (y2 - y1) * part
+        x, y = ville.point_sur_rue(self.depuis, self.vers, part)
 
         dx, dy = self.direction()
         ecart = ville.decalage_voie(self.depuis, self.vers, self.voie)
@@ -198,7 +231,8 @@ class Vehicule:
                 self.reservation = self.vers
                 trafic.reserver(self)
             else:
-                cible = min(cible, vitesse_permise(self.reste, RECUL_CARREFOUR))
+                cible = min(cible, vitesse_permise(self.reste,
+                                                   self.recul_du_carrefour()))
 
         if doit_ceder is not None and self.reservation is None:
             cible = min(cible, doit_ceder)
@@ -207,8 +241,7 @@ class Vehicule:
             self.vitesse = min(cible, self.vitesse + ACCELERATION * dt)
         else:
             self.vitesse = max(cible, self.vitesse - FREINAGE * dt)
-        if self.vitesse < 0.0:
-            self.vitesse = 0.0
+        self.vitesse = max(self.vitesse, 0.0)
 
         self.compter_les_arrets(dt)
 
@@ -224,6 +257,8 @@ class Vehicule:
 
     def ecart_vise(self, trafic):
         if self.prioritaire or self.voie != 0:
+            return 0.0
+        if self.reste < ZONE_DEGAGEMENT:
             return 0.0
 
         if trafic.priorite_active:
@@ -295,7 +330,8 @@ class Vehicule:
             return False
         if not self.prioritaire and abs(self.ecart_urgence) > 0.1:
             return False
-        if not self.prioritaire and self.secours_en_approche(trafic):
+        if (not self.prioritaire and self.reste >= ZONE_DEGAGEMENT
+                and self.secours_en_approche(trafic)):
             return False
         if not self.sortie_degagee(trafic):
             return False
@@ -341,11 +377,11 @@ class Vehicule:
 
     def compter_les_arrets(self, dt):
         immobile = self.vitesse < 0.3
-        proche = self.reste < ZONE_DECISION
 
-        if immobile and self.reste < RECUL_CARREFOUR + 4.0:
+        if immobile and self.reste < self.recul_du_carrefour() + 4.0:
             self.attente_stop = self.attente_stop + dt
-        if immobile and proche:
+
+        if immobile and self.reste < ZONE_DECISION:
             self.bloque_depuis = self.bloque_depuis + dt
         else:
             self.bloque_depuis = 0.0
@@ -411,7 +447,7 @@ class Vehicule:
                 self.reservation = None
             return
 
-        if self.reste <= code_route.RAYON_CARREFOUR:
+        if self.reste <= code_route.rayon_du_carrefour(self.vers):
             return
 
         if self.bloque_depuis > ABANDON_RESERVATION:

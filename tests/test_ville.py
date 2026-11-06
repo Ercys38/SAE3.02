@@ -42,18 +42,19 @@ class TestVille(unittest.TestCase):
             for voie in range(nombre - 1):
                 premier = ville.decalage_voie(depart, arrivee, voie)
                 second = ville.decalage_voie(depart, arrivee, voie + 1)
-                self.assertAlmostEqual(abs(premier - second), ville.LARGEUR_VOIE)
+                self.assertAlmostEqual(abs(premier - second),
+                                       ville.LARGEUR_VOIE)
 
-    def test_une_petite_rue_qui_debouche_sur_une_avenue_a_un_panneau(self):
+    def test_une_rue_qui_debouche_sans_feu_a_un_panneau(self):
         for carrefour in ville.CARREFOURS:
             if ville.CARREFOURS[carrefour]["feux"]:
                 continue
 
-            il_y_a_une_avenue = False
+            avenue_presente = False
             for voisin in ville.voisins(carrefour):
                 if ville.categorie(carrefour, voisin) == "avenue":
-                    il_y_a_une_avenue = True
-            if not il_y_a_une_avenue:
+                    avenue_presente = True
+            if not avenue_presente:
                 continue
 
             for voisin in ville.voisins(carrefour):

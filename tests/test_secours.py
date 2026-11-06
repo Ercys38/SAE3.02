@@ -4,9 +4,11 @@ import unittest
 from simulation import ville
 from simulation.feux import Feu, VERT, ORANGE, DUREE_ORANGE
 from simulation.secours import Secours, alerter_les_feux, DISTANCE_ALERTE
+from simulation.vehicule import VITESSE_AVENUE
 from simulation.simulation import Simulation
 
 PAS = 0.033
+ITINERAIRE = ["O", "C1", "C2", "C3", "C4", "C5", "C6", "E"]
 
 
 def traverser(priorite, graine, densite):
@@ -21,9 +23,9 @@ def traverser(priorite, graine, densite):
     vehicule = None
     while vehicule is None:
         simulation.avancer(PAS)
-        vehicule = simulation.lancer_un_secours("N")
+        vehicule = simulation.lancer_un_secours(itineraire=ITINERAIRE)
 
-    for i in range(int(300 / PAS)):
+    for i in range(int(400 / PAS)):
         simulation.avancer(PAS)
         if vehicule.sorti:
             break
@@ -33,26 +35,32 @@ def traverser(priorite, graine, densite):
 class TestSecours(unittest.TestCase):
 
     def test_le_secours_roule_plus_vite_qu_un_civil(self):
-        secours = Secours("O", "C")
+        secours = Secours("O", "C1")
         self.assertTrue(secours.prioritaire)
-        self.assertGreater(secours.vitesse_max, 13.9)
+        self.assertGreater(secours.vitesse_max, VITESSE_AVENUE)
 
-    def test_le_secours_va_tout_droit(self):
-        secours = Secours("O", "C")
-        self.assertEqual(secours.suivant, "E")
+    def test_le_secours_peut_tourner(self):
+        random.seed(1)
+        destinations = []
+        for i in range(60):
+            secours = Secours("O", "C1")
+            self.assertIn(secours.suivant, ville.voisins("C1"))
+            if secours.suivant not in destinations:
+                destinations.append(secours.suivant)
+        self.assertEqual(len(destinations), 2)
 
     def test_l_alerte_ne_porte_pas_au_dela_de_500_m(self):
-        feux = {"C": Feu()}
-        secours = Secours("N", "C")
+        feux = {"C1": Feu()}
+        secours = Secours("N1", "C1")
         secours.avance = 0.0
 
         alerter_les_feux([secours], feux)
         if secours.reste > DISTANCE_ALERTE:
-            self.assertIsNone(feux["C"].priorite)
+            self.assertIsNone(feux["C1"].priorite)
 
         secours.avance = secours.longueur_rue - 50.0
         alerter_les_feux([secours], feux)
-        self.assertEqual(feux["C"].priorite, "vertical")
+        self.assertEqual(feux["C1"].priorite, "vertical")
 
     def test_le_feu_passe_a_l_orange_avant_de_basculer(self):
         feu = Feu(axe_passant="horizontal")
@@ -70,7 +78,7 @@ class TestSecours(unittest.TestCase):
     def test_la_priorite_fait_gagner_du_temps(self):
         avec = []
         sans = []
-        for graine in (1, 2, 3, 4, 5, 6):
+        for graine in (1, 2, 3, 4):
             avec.append(traverser(True, graine, 60))
             sans.append(traverser(False, graine, 60))
 

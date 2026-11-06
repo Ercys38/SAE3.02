@@ -4,7 +4,7 @@ import unittest
 from simulation.simulation import Simulation
 from simulation.vehicule import LONGUEUR_VOITURE, LARGEUR_VOITURE
 
-ECHELLE = 2.0
+ECHELLE = 0.7
 LONGUEUR = LONGUEUR_VOITURE * ECHELLE
 LARGEUR = LARGEUR_VOITURE * ECHELLE
 

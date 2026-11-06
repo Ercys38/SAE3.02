@@ -1,11 +1,16 @@
+import math
+
 from . import ville
 
 DISTANCE_VIGILANCE = 45.0
 DUREE_STOP = 1.5
 BLOCAGE_MAX = 6.0
-RAYON_CARREFOUR = 18.0
+RAYON_CARREFOUR = 24.0
+RAYON_ROND_POINT = 26.0
+MORCEAUX_VIRAGE = 6
+MARGE_ANGULAIRE = 0.40
 ECART_TRAJECTOIRES = 11.0
-COSINUS_PARALLELE = 0.95
+ECART_PARALLELE = 7.0
 
 
 def passage_autorise(vehicule, trafic):
@@ -13,6 +18,9 @@ def passage_autorise(vehicule, trafic):
 
     if not trajectoires_compatibles(vehicule, trafic):
         return False
+
+    if ville.est_un_rond_point(carrefour):
+        return True
 
     if vehicule.bloque_depuis > BLOCAGE_MAX:
         return True
@@ -40,66 +48,205 @@ def trajectoires_compatibles(vehicule, trafic):
         return True
 
     mien = vehicule.mouvement()
-    segment_mien = trajet_dans_le_carrefour(vehicule.vers, mien)
+
+    if ville.est_un_rond_point(vehicule.vers):
+        mon_arc = arc_du_mouvement(vehicule.vers, mien)
+        for autre in actifs:
+            if autre == mien:
+                continue
+            if arcs_en_conflit(mon_arc,
+                               arc_du_mouvement(vehicule.vers, autre)):
+                return False
+        return True
+
+    mon_trajet = trajet_dans_le_carrefour(vehicule.vers, mien)
 
     for autre in actifs:
         if autre == mien:
             continue
-        autre_segment = trajet_dans_le_carrefour(vehicule.vers, autre)
+        autre_trajet = trajet_dans_le_carrefour(vehicule.vers, autre)
 
-        if paralleles(segment_mien, autre_segment):
-            if not se_croisent(segment_mien, autre_segment):
-                continue
+        ecart = distance_entre_trajets(mon_trajet, autre_trajet)
 
-        if distance_entre_segments(segment_mien, autre_segment) < ECART_TRAJECTOIRES:
+        meme_sens = autre[0] == mien[0] and autre[2] == mien[2]
+        sens_oppose = autre[0] == mien[2] and autre[2] == mien[0]
+
+        if meme_sens or sens_oppose:
+            if not trajets_se_croisent(mon_trajet, autre_trajet):
+                if ecart >= ECART_PARALLELE:
+                    continue
+            return False
+
+        if ecart < ECART_TRAJECTOIRES:
             return False
     return True
 
 
-def paralleles(premier, second):
-    ax = premier[1][0] - premier[0][0]
-    ay = premier[1][1] - premier[0][1]
-    bx = second[1][0] - second[0][0]
-    by = second[1][1] - second[0][1]
-
-    na = (ax * ax + ay * ay) ** 0.5
-    nb = (bx * bx + by * by) ** 0.5
-    if na < 0.001 or nb < 0.001:
-        return False
-
-    cosinus = (ax * bx + ay * by) / (na * nb)
-    return abs(cosinus) > COSINUS_PARALLELE
+def rayon_du_carrefour(carrefour):
+    if ville.est_un_rond_point(carrefour):
+        return RAYON_ROND_POINT
+    return RAYON_CARREFOUR
 
 
-def trajet_dans_le_carrefour(carrefour, mouvement):
+def angle(centre, point):
+    return math.atan2(point[1] - centre[1], point[0] - centre[0])
+
+
+def rayon_vers(centre, point):
+    dx = point[0] - centre[0]
+    dy = point[1] - centre[1]
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def tour_du_rond_point(carrefour, depart, arrivee):
+    centre = ville.position(carrefour)
+
+    debut = angle(centre, depart)
+    fin = angle(centre, arrivee)
+    rayon_debut = rayon_vers(centre, depart)
+    rayon_fin = rayon_vers(centre, arrivee)
+
+    ecart = fin - debut
+    while ecart > -0.1:
+        ecart = ecart - 2 * math.pi
+
+    nombre = int(abs(ecart) / 0.35) + 2
+    points = []
+    for i in range(nombre + 1):
+        part = i / nombre
+        a = debut + ecart * part
+        r = rayon_debut + (rayon_fin - rayon_debut) * part
+        points.append((centre[0] + r * math.cos(a),
+                       centre[1] + r * math.sin(a)))
+    return points
+
+
+def arc_du_mouvement(carrefour, mouvement):
+    rayon = rayon_du_carrefour(carrefour)
     entree, voie, sortie, voie_sortie = mouvement
-    depart = point_de_file(entree, carrefour, voie, False)
-    arrivee = point_de_file(sortie, carrefour, voie_sortie, True)
-    return (depart, arrivee)
+    depart = point_de_file(entree, carrefour, voie, False, rayon)
+    arrivee = point_de_file(sortie, carrefour, voie_sortie, True, rayon)
+
+    centre = ville.position(carrefour)
+    debut = angle(centre, depart)
+    fin = angle(centre, arrivee)
+
+    ecart = fin - debut
+    while ecart > -0.1:
+        ecart = ecart - 2 * math.pi
+    return (debut, ecart)
 
 
-def point_de_file(branche, carrefour, voie, sortant):
-    xc, yc = ville.position(carrefour)
-    xb, yb = ville.position(branche)
+def angle_dans_arc(theta, debut, ecart):
+    recule = (debut - theta) % (2 * math.pi)
+    return recule <= abs(ecart) + MARGE_ANGULAIRE
 
-    longueur = ((xb - xc) ** 2 + (yb - yc) ** 2) ** 0.5
-    if longueur < 0.001:
-        longueur = 0.001
-    ux = (xb - xc) / longueur
-    uy = (yb - yc) / longueur
+
+def arcs_en_conflit(premier, second):
+    if angle_dans_arc(second[0], premier[0], premier[1]):
+        return True
+    if angle_dans_arc(premier[0], second[0], second[1]):
+        return True
+    return False
+
+
+def courbe_du_virage(depart, pivot, arrivee):
+    points = []
+    for i in range(MORCEAUX_VIRAGE + 1):
+        t = i / MORCEAUX_VIRAGE
+        a = (1 - t) * (1 - t)
+        b = 2 * (1 - t) * t
+        c = t * t
+        points.append((a * depart[0] + b * pivot[0] + c * arrivee[0],
+                       a * depart[1] + b * pivot[1] + c * arrivee[1]))
+    return points
+
+
+def point_de_rencontre(depart, direction_depart, arrivee, direction_arrivee):
+    ux, uy = direction_depart
+    vx, vy = direction_arrivee
+
+    det = uy * vx - ux * vy
+    if abs(det) < 0.01:
+        return ((depart[0] + arrivee[0]) / 2, (depart[1] + arrivee[1]) / 2)
+
+    ex = arrivee[0] - depart[0]
+    ey = arrivee[1] - depart[1]
+
+    t = (ey * vx - ex * vy) / det
+    if t < 0:
+        t = 0
+    return (depart[0] + ux * t, depart[1] + uy * t)
+
+
+def trajet_dans_le_carrefour(carrefour, mouvement, rayon=None):
+    if rayon is None:
+        rayon = rayon_du_carrefour(carrefour)
+
+    entree, voie, sortie, voie_sortie = mouvement
+    depart = point_de_file(entree, carrefour, voie, False, rayon)
+    arrivee = point_de_file(sortie, carrefour, voie_sortie, True, rayon)
+
+    if ville.est_un_rond_point(carrefour):
+        return tour_du_rond_point(carrefour, depart, arrivee)
+
+    direction_depart = ville.tangente_rue(entree, carrefour, 1.0)
+    direction_arrivee = ville.tangente_rue(carrefour, sortie, 0.0)
+
+    pivot = point_de_rencontre(depart, direction_depart,
+                               arrivee, direction_arrivee)
+    return courbe_du_virage(depart, pivot, arrivee)
+
+
+def morceaux(trajet):
+    paires = []
+    for i in range(len(trajet) - 1):
+        paires.append((trajet[i], trajet[i + 1]))
+    return paires
+
+
+def distance_entre_trajets(premier, second):
+    plus_court = None
+    for a in morceaux(premier):
+        for b in morceaux(second):
+            d = distance_entre_segments(a, b)
+            if plus_court is None or d < plus_court:
+                plus_court = d
+    return plus_court
+
+
+def trajets_se_croisent(premier, second):
+    for a in morceaux(premier):
+        for b in morceaux(second):
+            if se_croisent(a, b):
+                return True
+    return False
+
+
+def point_de_file(branche, carrefour, voie, sortant, rayon=None):
+    if rayon is None:
+        rayon = RAYON_CARREFOUR
 
     if sortant:
-        ecart = ville.decalage_voie(carrefour, branche, voie)
-        droite_x = -uy
-        droite_y = ux
+        depart = carrefour
+        arrivee = branche
     else:
-        ecart = ville.decalage_voie(branche, carrefour, voie)
-        droite_x = uy
-        droite_y = -ux
+        depart = branche
+        arrivee = carrefour
 
-    x = xc + ux * RAYON_CARREFOUR + droite_x * ecart
-    y = yc + uy * RAYON_CARREFOUR + droite_y * ecart
-    return (x, y)
+    longueur = ville.longueur(depart, arrivee)
+    if longueur < 1.0:
+        longueur = 1.0
+
+    part = rayon / longueur
+    if not sortant:
+        part = 1.0 - part
+    part = min(max(part, 0.0), 1.0)
+
+    x, y = ville.point_sur_rue(depart, arrivee, part)
+    dx, dy = ville.tangente_rue(depart, arrivee, part)
+    ecart = ville.decalage_voie(depart, arrivee, voie)
+    return (x - dy * ecart, y + dx * ecart)
 
 
 def distance_entre_segments(premier, second):
@@ -125,53 +272,33 @@ def distance_point_segment(point, extremite1, extremite2):
         return ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5
 
     t = ((px - x1) * dx + (py - y1) * dy) / carre
-    if t < 0.0:
-        t = 0.0
-    if t > 1.0:
-        t = 1.0
+    t = min(max(t, 0.0), 1.0)
 
     proche_x = x1 + t * dx
     proche_y = y1 + t * dy
     return ((px - proche_x) ** 2 + (py - proche_y) ** 2) ** 0.5
 
 
-def sens(p, q, r):
-    valeur = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
-    if abs(valeur) < 1e-9:
-        return 0
-    if valeur > 0:
-        return 1
-    return -1
-
-
-def sur_le_segment(p, q, r):
-    if q[0] < min(p[0], r[0]) - 1e-9 or q[0] > max(p[0], r[0]) + 1e-9:
-        return False
-    if q[1] < min(p[1], r[1]) - 1e-9 or q[1] > max(p[1], r[1]) + 1e-9:
-        return False
-    return True
-
-
 def se_croisent(premier, second):
     a, b = premier
     c, d = second
 
-    s1 = sens(a, b, c)
-    s2 = sens(a, b, d)
-    s3 = sens(c, d, a)
-    s4 = sens(c, d, b)
+    ux = b[0] - a[0]
+    uy = b[1] - a[1]
+    vx = d[0] - c[0]
+    vy = d[1] - c[1]
 
-    if s1 != s2 and s3 != s4:
-        return True
-    if s1 == 0 and sur_le_segment(a, c, b):
-        return True
-    if s2 == 0 and sur_le_segment(a, d, b):
-        return True
-    if s3 == 0 and sur_le_segment(c, a, d):
-        return True
-    if s4 == 0 and sur_le_segment(c, b, d):
-        return True
-    return False
+    det = uy * vx - ux * vy
+    if abs(det) < 1e-9:
+        return False
+
+    ex = c[0] - a[0]
+    ey = c[1] - a[1]
+
+    t = (ey * vx - ex * vy) / det
+    u = (ey * ux - ex * uy) / det
+
+    return 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0
 
 
 def quelqu_un_arrive(vehicule, trafic, regle):

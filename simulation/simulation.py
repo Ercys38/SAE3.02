@@ -1,13 +1,14 @@
 import random
 
 from . import ville
-from .feux import Feu
 from . import vehicule
 from . import secours
+from .feux import Feu
 from .vehicule import Vehicule, LONGUEUR_VOITURE
 
-MAX_VEHICULES = 50
+MAX_VEHICULES = 130
 DENSITE_PAR_DEFAUT = 30
+PLACE_A_L_ENTREE = 4 * LONGUEUR_VOITURE
 
 
 def liberer_le_carrefour(mouvements, occupants, carrefour, identifiant):
@@ -20,37 +21,43 @@ def liberer_le_carrefour(mouvements, occupants, carrefour, identifiant):
     actifs = mouvements.get(carrefour)
     if actifs is None:
         return
+
     for cle in list(actifs.keys()):
         actifs[cle].discard(identifiant)
         if not actifs[cle]:
             del actifs[cle]
+
     if not actifs:
         mouvements.pop(carrefour, None)
 
 
 class Trafic:
+
     def __init__(self, vehicules, feux, mouvements, occupants,
                  priorite_active=True):
         self.feux = feux
-        self.priorite_active = priorite_active
         self.mouvements = mouvements
         self.occupants = occupants
+        self.priorite_active = priorite_active
 
         self.par_file = {}
         self.vers_carrefour = {}
 
         for v in vehicules:
-            cle = (v.depuis, v.vers, v.voie)
-            if cle not in self.par_file:
-                self.par_file[cle] = []
-            self.par_file[cle].append(v)
-
-            if v.vers not in self.vers_carrefour:
-                self.vers_carrefour[v.vers] = []
-            self.vers_carrefour[v.vers].append(v)
+            self.ranger(v)
 
         for liste in self.par_file.values():
             liste.sort(key=lambda v: v.avance)
+
+    def ranger(self, vehicule):
+        cle = (vehicule.depuis, vehicule.vers, vehicule.voie)
+        if cle not in self.par_file:
+            self.par_file[cle] = []
+        self.par_file[cle].append(vehicule)
+
+        if vehicule.vers not in self.vers_carrefour:
+            self.vers_carrefour[vehicule.vers] = []
+        self.vers_carrefour[vehicule.vers].append(vehicule)
 
     def file(self, depuis, vers, voie):
         return self.par_file.get((depuis, vers, voie), ())
@@ -70,15 +77,9 @@ class Trafic:
         if vises is not None and vehicule in vises:
             vises.remove(vehicule)
 
-        cle = (vehicule.depuis, vehicule.vers, vehicule.voie)
-        if cle not in self.par_file:
-            self.par_file[cle] = []
-        self.par_file[cle].append(vehicule)
-        self.par_file[cle].sort(key=lambda v: v.avance)
-
-        if vehicule.vers not in self.vers_carrefour:
-            self.vers_carrefour[vehicule.vers] = []
-        self.vers_carrefour[vehicule.vers].append(vehicule)
+        self.ranger(vehicule)
+        self.par_file[(vehicule.depuis, vehicule.vers,
+                       vehicule.voie)].sort(key=lambda v: v.avance)
 
     def file_libre(self, depuis, vers, voie, avance, marge):
         for v in self.file(depuis, vers, voie):
@@ -106,6 +107,7 @@ class Trafic:
 
 
 class Simulation:
+
     def __init__(self):
         self.feux = {}
         decalage = 0.0
@@ -137,53 +139,78 @@ class Simulation:
 
         trafic = Trafic(self.vehicules, self.feux, self.mouvements,
                         self.occupants, self.priorite_active)
-        for vehicule in self.vehicules:
-            vehicule.mise_a_jour(trafic, dt)
+        for vehicule_courant in self.vehicules:
+            vehicule_courant.mise_a_jour(trafic, dt)
 
         self.retirer_les_vehicules_sortis()
-
-    def retirer_les_vehicules_sortis(self):
-        restants = []
-        for v in self.vehicules:
-            if v.sorti:
-                if v.reservation is not None:
-                    self.liberer(v.reservation, v.id)
-            else:
-                restants.append(v)
-        self.vehicules = restants
 
     def liberer(self, carrefour, identifiant):
         liberer_le_carrefour(self.mouvements, self.occupants,
                              carrefour, identifiant)
 
-    def entree_libre(self, depuis, vers):
+    def retirer_les_vehicules_sortis(self):
+        restants = []
         for v in self.vehicules:
-            if (v.depuis, v.vers, v.voie) != (depuis, vers, 0):
-                continue
-            if v.avance < 4 * LONGUEUR_VOITURE:
-                return False
-        return True
-
-    def lancer_un_secours(self, depuis=None):
-        if depuis is None:
-            candidats = ville.entrees()
-            random.shuffle(candidats)
-        else:
-            candidats = [depuis]
-
-        for entree in candidats:
-            vers = ville.voisins(entree)[0]
-            if not self.entree_libre(entree, vers):
-                continue
-            vehicule_secours = secours.Secours(entree, vers, 0.0, 0)
-            self.vehicules.append(vehicule_secours)
-            return vehicule_secours
-
-        return None
+            if not v.sorti:
+                restants.append(v)
+            elif v.reservation is not None:
+                self.liberer(v.reservation, v.id)
+        self.vehicules = restants
 
     def regler_la_vitesse(self, kmh):
         vehicule.LIMITES["avenue"] = kmh / 3.6
         vehicule.LIMITES["rue"] = kmh * 0.6 / 3.6
+
+    def entree_libre(self, depuis, vers):
+        for v in self.vehicules:
+            if (v.depuis, v.vers, v.voie) != (depuis, vers, 0):
+                continue
+            if v.avance < PLACE_A_L_ENTREE:
+                return False
+        return True
+
+    def choisir_une_intervention(self, depart):
+        possibles = []
+        for sortie in ville.entrees():
+            if sortie != depart:
+                possibles.append(sortie)
+        if not possibles:
+            return None
+        return random.choice(possibles)
+
+    def lancer_un_secours(self, service=None, depuis=None, itineraire=None,
+                          destination=None):
+        if service is None:
+            service = random.choice(secours.SERVICES)
+
+        if depuis is None and itineraire:
+            depuis = itineraire[0]
+
+        if depuis is None:
+            batiments = ville.batiments_du_service(service)
+            if batiments:
+                depuis = ville.BATIMENTS[batiments[0]]["acces"]
+
+        if depuis is None:
+            return None
+
+        vers = ville.voisins(depuis)[0]
+        if not self.entree_libre(depuis, vers):
+            return None
+
+        if destination is None and not itineraire:
+            destination = self.choisir_une_intervention(depuis)
+
+        if not itineraire and destination is not None:
+            itineraire = ville.itineraire(depuis, destination)
+
+        if itineraire:
+            destination = itineraire[-1]
+
+        nouveau = secours.Secours(depuis, vers, 0.0, 0, itineraire,
+                                  service, destination)
+        self.vehicules.append(nouveau)
+        return nouveau
 
     def nombre_vise(self):
         return int(MAX_VEHICULES * self.densite / 100)
@@ -211,28 +238,25 @@ class Simulation:
                 self.liberer(partant.reservation, partant.id)
 
     def creer_un_vehicule(self):
-        occupes = {}
-        for v in self.vehicules:
-            cle = (v.depuis, v.vers, v.voie)
-            if cle not in occupes:
-                occupes[cle] = []
-            occupes[cle].append(v.avance)
-
         entrees = ville.entrees()
         random.shuffle(entrees)
 
-        for entree in entrees:
-            depuis = entree
-            vers = ville.voisins(entree)[0]
+        for depuis in entrees:
+            vers = ville.voisins(depuis)[0]
 
             files = list(range(ville.voies(depuis, vers)))
             random.shuffle(files)
+
             for voie in files:
-                libre = True
-                for avance in occupes.get((depuis, vers, voie), ()):
-                    if avance < 4 * LONGUEUR_VOITURE:
-                        libre = False
-                if libre:
+                if self.place_libre(depuis, vers, voie):
                     return Vehicule(depuis, vers, 0.0, voie)
 
         return None
+
+    def place_libre(self, depuis, vers, voie):
+        for v in self.vehicules:
+            if (v.depuis, v.vers, v.voie) != (depuis, vers, voie):
+                continue
+            if v.avance < PLACE_A_L_ENTREE:
+                return False
+        return True

@@ -6,10 +6,11 @@ from . import code_route
 from .feux import VERT, ORANGE, ROUGE
 from .vehicule import LONGUEUR_VOITURE, LARGEUR_VOITURE
 
-ECHELLE = 0.7
+ECHELLE = 0.9
 MARGE = 30
 PERIODE = 33
 VITESSE_MAX = 5
+GROSSISSEMENT_SECOURS = 1.35
 
 FOND = "#eeeee8"
 BITUME = "#787a80"
@@ -23,13 +24,13 @@ TEXTE_PETIT = "#7d7d82"
 CIVIL = "#3e609e"
 CIVIL_ARRETE = "#263a66"
 
-SERVICES = ("pompiers", "samu", "police")
-
 COULEURS_SECOURS = {
-    "pompiers": "#d4342c",
-    "samu": "#e9c93a",
-    "police": "#23356e",
+    "pompiers": "#e8382b",
+    "samu": "#f5d426",
+    "police": "#2f6fd0",
 }
+
+SERVICES = ("pompiers", "samu", "police")
 
 NOMS_SERVICE = {
     "pompiers": "Pompiers",
@@ -439,8 +440,13 @@ class Fenetre:
             self.placer_un_vehicule(vehicules[i], self.formes_vehicules[i])
 
     def placer_un_vehicule(self, vehicule, forme):
-        demi_longueur = LONGUEUR_VOITURE * ECHELLE / 2
-        demi_largeur = LARGEUR_VOITURE * ECHELLE / 2
+        if vehicule.prioritaire:
+            grossissement = GROSSISSEMENT_SECOURS
+        else:
+            grossissement = 1.0
+
+        demi_longueur = LONGUEUR_VOITURE * ECHELLE * grossissement / 2
+        demi_largeur = LARGEUR_VOITURE * ECHELLE * grossissement / 2
 
         x, y = en_pixels(vehicule.position())
         dx, dy = vehicule.direction()
@@ -459,13 +465,18 @@ class Fenetre:
             y - dy * demi_longueur + py * demi_largeur)
 
         if vehicule.prioritaire:
-            couleur = COULEURS_SECOURS[vehicule.service]
-        elif vehicule.vitesse < 0.3:
+            self.toile.itemconfigure(
+                forme, fill=COULEURS_SECOURS[vehicule.service],
+                outline=BLANC, width=1.5, state="normal")
+            return
+
+        if vehicule.vitesse < 0.3:
             couleur = CIVIL_ARRETE
         else:
             couleur = CIVIL
 
-        self.toile.itemconfigure(forme, fill=couleur, state="normal")
+        self.toile.itemconfigure(forme, fill=couleur, outline="", width=0,
+                                 state="normal")
 
     def lancer(self):
         self.battement()

@@ -122,11 +122,15 @@ class Simulation:
         self.densite = DENSITE_PAR_DEFAUT
         self.temps = 0.0
         self.priorite_active = True
+        self.supervise = False
+        self.carrefours_alertes = {}
 
     def avancer(self, dt):
         self.temps = self.temps + dt
 
-        if self.priorite_active:
+        if self.supervise:
+            pass
+        elif self.priorite_active:
             secours.alerter_les_feux(self.vehicules, self.feux)
         else:
             for carrefour in self.feux:

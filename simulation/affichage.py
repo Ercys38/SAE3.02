@@ -1,4 +1,5 @@
 import math
+import threading
 import tkinter as tk
 
 from . import ville
@@ -76,11 +77,17 @@ def points_de_la_rue(depart, arrivee, ecart):
 
 class Fenetre:
 
-    def __init__(self, simulation):
+    def __init__(self, simulation, moteur=None, verrou=None):
         self.simulation = simulation
+        self.moteur = moteur
+        self.verrou = verrou
+        if self.verrou is None:
+            self.verrou = threading.Lock()
+
         self.facteur = 1
         self.secours = None
         self.appel_en_attente = None
+        self.ligne_journal = None
 
         largeur_m, hauteur_m = ville.taille_ville()
         self.largeur = int(largeur_m * ECHELLE) + 2 * MARGE
@@ -183,6 +190,8 @@ class Fenetre:
 
     def changer_vitesse(self, valeur):
         self.facteur = valeur
+        if self.moteur is not None:
+            self.moteur.facteur = valeur
         return "x " + str(valeur)
 
     def changer_limite(self, valeur):
@@ -371,21 +380,30 @@ class Fenetre:
         return formes
 
     def battement(self):
-        for i in range(self.facteur):
-            self.simulation.avancer(PERIODE / 1000)
+        if self.moteur is None:
+            for i in range(self.facteur):
+                self.simulation.avancer(PERIODE / 1000)
+
         self.rafraichir()
         self.racine.after(PERIODE, self.battement)
 
     def rafraichir(self):
-        self.rafraichir_les_feux()
-        self.rafraichir_les_vehicules()
-        self.rafraichir_l_appel()
-        self.rafraichir_l_intervention()
+        with self.verrou:
+            self.rafraichir_les_feux()
+            self.rafraichir_les_vehicules()
+            self.rafraichir_l_appel()
+            self.rafraichir_l_intervention()
+            self.rafraichir_l_etiquette()
 
-        self.toile.itemconfigure(
-            self.etiquette_bas,
-            text=str(len(self.simulation.vehicules)) + " voitures   |   "
+    def rafraichir_l_etiquette(self):
+        texte = (str(len(self.simulation.vehicules)) + " voitures   |   "
                  + "temps ecoule : " + str(int(self.simulation.temps)) + " s")
+
+        if self.moteur is not None:
+            texte = (texte + "   |   messages echanges : "
+                     + str(self.moteur.envoyes + self.moteur.recus))
+
+        self.toile.itemconfigure(self.etiquette_bas, text=texte)
 
     def rafraichir_les_feux(self):
         for carrefour, voisin in self.formes_feux:
@@ -399,9 +417,12 @@ class Fenetre:
             return
 
         nouveau = self.simulation.lancer_un_secours(self.appel_en_attente)
-        if nouveau is not None:
-            self.secours = nouveau
-            self.appel_en_attente = None
+        if nouveau is None:
+            return
+
+        self.secours = nouveau
+        self.appel_en_attente = None
+        self.ligne_journal = self.ouvrir_une_ligne(nouveau)
 
     def rafraichir_l_intervention(self):
         if self.secours is None:
@@ -415,6 +436,7 @@ class Fenetre:
         if self.secours.arrive:
             self.etiquette_secours.configure(text=nom + " arrive en " + chrono)
             self.toile.itemconfigure(self.marqueur, state="hidden")
+            self.fermer_une_ligne()
             return
 
         self.etiquette_secours.configure(text=nom + " en route : " + chrono)
@@ -425,6 +447,27 @@ class Fenetre:
         x, y = en_pixels(ville.position(self.secours.destination))
         self.toile.coords(self.marqueur, x - 11, y - 11, x + 11, y + 11)
         self.toile.itemconfigure(self.marqueur, state="normal")
+
+    def ouvrir_une_ligne(self, vehicule):
+        if self.moteur is None:
+            return None
+        return self.moteur.superviseur.ouvrir_une_intervention(
+            self.simulation.densite, vehicule.service, vehicule.depuis,
+            vehicule.destination)
+
+    def fermer_une_ligne(self):
+        if self.ligne_journal is None or self.moteur is None:
+            return
+
+        temps = round(self.secours.temps_de_trajet, 1)
+        if self.simulation.priorite_active:
+            self.moteur.superviseur.fermer_une_intervention(
+                self.ligne_journal, temps_avec=temps)
+        else:
+            self.moteur.superviseur.fermer_une_intervention(
+                self.ligne_journal, temps_sans=temps)
+
+        self.ligne_journal = None
 
     def rafraichir_les_vehicules(self):
         vehicules = self.simulation.vehicules

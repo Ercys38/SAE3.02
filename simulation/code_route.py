@@ -5,6 +5,7 @@ from . import ville
 DISTANCE_VIGILANCE = 45.0
 DUREE_STOP = 1.5
 BLOCAGE_MAX = 6.0
+ATTENTE_SECOURS = 2.0
 RAYON_CARREFOUR = 24.0
 RAYON_ROND_POINT = 26.0
 MORCEAUX_VIRAGE = 6
@@ -22,12 +23,16 @@ def passage_autorise(vehicule, trafic):
     if ville.est_un_rond_point(carrefour):
         return True
 
-    if vehicule.bloque_depuis > BLOCAGE_MAX:
-        return True
-
     feu = trafic.feux.get(carrefour)
     if feu is not None:
-        return feu.passage_autorise(ville.axe(vehicule.depuis, vehicule.vers))
+        if feu.passage_autorise(ville.axe(vehicule.depuis, vehicule.vers)):
+            return True
+        if vehicule.prioritaire and vehicule.attente_stop >= ATTENTE_SECOURS:
+            return True
+        return False
+
+    if vehicule.bloque_depuis > BLOCAGE_MAX:
+        return True
 
     panneau = ville.panneau(carrefour, vehicule.depuis)
 

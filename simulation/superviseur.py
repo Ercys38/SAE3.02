@@ -101,7 +101,8 @@ class Superviseur:
         self.repondre(messages.accord_priorite(carrefour, axe))
 
     def liberer(self, emetteur, carrefour):
-        if self.priorites.get(carrefour) != emetteur:
+        proprietaire = self.priorites.get(carrefour)
+        if proprietaire is not None and proprietaire != emetteur:
             return
 
         self.regler_un_feu(carrefour, None)

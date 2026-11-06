@@ -2,18 +2,28 @@
 
 SAÉ R3.02 — Équipe K2 X ERCYS — novembre 2026
 
-Trois choses ont été faites au-delà du périmètre annoncé. La communication
+Quatre choses ont été faites au-delà du périmètre annoncé. La communication
 réseau réelle entre deux machines, d'abord, qui était classée en Won't have :
 le superviseur s'expose en serveur TCP et la simulation s'y connecte depuis
 l'autre VM, avec les mêmes messages JSON que ceux décrits au 2.2. Le
 déploiement sur deux VM et le titre de la SAÉ la rendaient difficile à
-écarter. Ensuite le réseau routier : une avenue de 1,1 km avec six rues, cinq
+écarter. Elle s'accompagne d'une découverte automatique en UDP : la simulation
+diffuse une question sur le réseau local et le superviseur répond, de sorte
+qu'aucune adresse n'est à configurer même si elles changent d'un jour à
+l'autre. Ensuite le réseau routier : une avenue de 1,1 km avec six rues, cinq
 carrefours à feux et un rond-point, au lieu du carrefour unique envisagé —
 c'est ce qui permet de démontrer l'onde verte sur plusieurs carrefours
-successifs, ce qu'un carrefour isolé ne montre pas. Enfin trois services
+successifs, ce qu'un carrefour isolé ne montre pas. Puis trois services
 d'urgence distincts, avec leurs bâtiments de départ et leur code couleur, et
 un superviseur capable d'en gérer plusieurs à la fois, ce qui était aussi en
-Won't have.
+Won't have. Enfin la base SQLite prévue au 2.5 ne vit pas dans
+l'application mais sur la machine du superviseur : la simulation ne l'ouvre
+jamais, elle lui envoie l'intervention et c'est lui qui écrit.
+
+Le cahier des charges annonçait cinq types de messages ; il y en a sept. Les
+deux derniers, debut_intervention et fin_intervention, servent à la simulation
+pour demander au superviseur d'ouvrir puis de compléter la ligne en base,
+puisqu'elle n'écrit elle-même jamais dedans.
 
 Une fonctionnalité annoncée n'est pas livrée : le recalcul d'itinéraire selon
 la densité observée. C'était un Should have chiffré à huit heures, et le

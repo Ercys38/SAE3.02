@@ -425,7 +425,8 @@ class Vehicule:
         if not voisins:
             return precedent
 
-        permis = self.mouvements_permis(voie, ville.voies(precedent, carrefour))
+        nombre = ville.voies(precedent, carrefour)
+        permis = self.mouvements_permis(voie, nombre)
 
         choix = []
         for v in voisins:

@@ -1,7 +1,7 @@
 import sys
 import time
 
-from simulation.journal import ouvrir_un_journal
+from simulation.journal import Journal
 from simulation.reseau import Serveur, Annonceur, PORT
 from simulation.superviseur import Superviseur
 
@@ -11,7 +11,7 @@ def main():
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
 
-    journal = ouvrir_un_journal()
+    journal = Journal()
     superviseur = Superviseur(journal=journal)
     serveur = Serveur(superviseur, port=port)
     annonceur = Annonceur(port_du_serveur=port)

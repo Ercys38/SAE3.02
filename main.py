@@ -6,12 +6,12 @@ from simulation.superviseur import Superviseur
 from simulation.reseau import (ClientSuperviseur, PORT,
                                trouver_le_superviseur)
 from simulation.moteur import Moteur
-from simulation.journal import ouvrir_un_journal
+from simulation.journal import Journal
 from simulation.affichage import Fenetre
 
 
 def superviseur_local(simulation, verrou):
-    journal = ouvrir_un_journal()
+    journal = Journal()
     print("superviseur local, base :", journal.nom)
     superviseur = Superviseur(simulation.feux, verrou, journal)
     superviseur.demarrer()

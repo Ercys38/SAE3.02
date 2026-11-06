@@ -35,7 +35,8 @@ class Moteur:
         with self.verrou:
             self.simulation.avancer(dt)
 
-        self.depuis_la_derniere_position = self.depuis_la_derniere_position + dt
+        self.depuis_la_derniere_position = (
+            self.depuis_la_derniere_position + dt)
         if self.depuis_la_derniere_position >= PERIODE_POSITION:
             self.depuis_la_derniere_position = 0.0
             self.annoncer_les_secours()
@@ -88,9 +89,11 @@ class Moteur:
     def liberer_les_anciens(self, identifiant, vises):
         anciens = self.carrefours_tenus.get(identifiant, [])
         for carrefour in anciens:
-            if carrefour not in vises:
-                self.emettre(messages.creer(messages.LIBERATION, identifiant,
-                                            {"carrefour": carrefour}))
+            if carrefour in vises:
+                continue
+            self.alertes.pop(carrefour, None)
+            self.emettre(messages.creer(messages.LIBERATION, identifiant,
+                                        {"carrefour": carrefour}))
 
     def emettre(self, message):
         self.superviseur.envoyer(message)

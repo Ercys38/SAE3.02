@@ -1,6 +1,6 @@
 import sys
 
-from simulation.journal import ouvrir_un_journal
+from simulation.journal import Journal
 
 NOMS = {"pompiers": "Pompiers", "samu": "SAMU", "police": "Police"}
 
@@ -35,7 +35,7 @@ def main():
     if len(sys.argv) > 1:
         nombre = int(sys.argv[1])
 
-    journal = ouvrir_un_journal()
+    journal = Journal()
     print("Historique des interventions -", journal.nom)
     print("")
     print("id  date                 densite service   trajet        "

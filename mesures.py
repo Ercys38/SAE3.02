@@ -50,7 +50,8 @@ def mesurer(densite):
 
 def main():
     print("Temps de traversee du vehicule de secours")
-    print("Moyenne sur " + str(ESSAIS) + " trajets, O vers E (1,1 km, 6 carrefours)")
+    print("Moyenne sur " + str(ESSAIS)
+          + " trajets, O vers E (1,1 km, 6 carrefours)")
     print("")
     print("densite   sans priorite   avec priorite   gain")
 

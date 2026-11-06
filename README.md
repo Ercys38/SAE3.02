@@ -10,11 +10,9 @@
   <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white">
   <img src="https://img.shields.io/badge/d%C3%A9pendances-aucune-success">
   <img src="https://img.shields.io/badge/interface-tkinter-informational">
-  <img src="https://img.shields.io/badge/base-MariaDB-003545?logo=mariadb&logoColor=white">
+  <img src="https://img.shields.io/badge/base-SQLite-003B57?logo=sqlite&logoColor=white">
   <img src="https://img.shields.io/badge/r%C3%A9seau-TCP%2FJSON-orange">
 </p>
-
-<p align="center"><img src="docs/apercu.png" width="100%"></p>
 
 ---
 
@@ -91,7 +89,7 @@ messages passent alors par une socket TCP, une ligne de JSON par message.
 flowchart LR
     subgraph VM1["VM 1"]
         S["serveur.py<br/>superviseur"]
-        D[("MariaDB<br/>sae302")]
+        D[("SQLite<br/>historique.db")]
         S --- D
     end
     subgraph VM2["VM 2"]
@@ -146,35 +144,14 @@ derniers servent à l'écriture en base.
 
 ## La base
 
-Les interventions sont enregistrées dans MariaDB, sur la machine du
-superviseur. La simulation n'écrit jamais dans la base : elle envoie
+Les interventions sont enregistrées dans une base SQLite, sur la machine du
+superviseur. La simulation n'écrit jamais dedans : elle envoie
 `debut_intervention` quand on appelle un service et `fin_intervention` quand
 le véhicule arrive, et c'est le superviseur qui insère puis complète la ligne.
 
-Installation, sur la machine du superviseur :
-
-```bash
-sudo apt install -y mariadb-server python3-pymysql
-sudo systemctl enable --now mariadb
-```
-
-puis, dans `sudo mariadb` :
-
-```sql
-CREATE DATABASE IF NOT EXISTS sae302 CHARACTER SET utf8mb4;
-CREATE USER IF NOT EXISTS 'sae'@'localhost' IDENTIFIED BY 'sae';
-GRANT ALL PRIVILEGES ON sae302.* TO 'sae'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-La table `interventions` garde la date, la densité, le service, le départ,
-l'arrivée, le temps avec le dispositif et le temps sans. Les identifiants de
-connexion se changent par les variables d'environnement `SAE_DB_HOTE`,
-`SAE_DB_UTILISATEUR`, `SAE_DB_MOT_DE_PASSE` et `SAE_DB_NOM`.
-
-Si MariaDB n'est pas joignable, le programme le dit et bascule sur un fichier
-SQLite local. C'est un filet de sécurité pour la démonstration, pas le mode
-nominal.
+Le fichier `historique.db` se crée tout seul à la racine, il n'y a rien à
+installer. La table `interventions` garde la date, la densité, le service, le
+départ, l'arrivée, le temps avec le dispositif et le temps sans.
 
 Pour relire l'historique :
 
@@ -203,7 +180,7 @@ parcours, les deux temps et le gain, et la moyenne en bas.
 | `simulation/superviseur.py` | le poste central |
 | `simulation/moteur.py` | le thread qui fait avancer le trafic |
 | `simulation/reseau.py` | le serveur TCP et son client |
-| `simulation/journal.py` | la base MariaDB, et le repli SQLite |
+| `simulation/journal.py` | la base SQLite |
 | `historique.py` | affiche les interventions enregistrées |
 
 PEP 8, noms et commentaires en français, aucune dépendance extérieure.

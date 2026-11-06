@@ -43,6 +43,7 @@ BATIMENT_BORD = "#3b3b40"
 ILOT = "#8ca877"
 ILOT_BORD = "#f4f4f0"
 INTERVENTION = "#e0562a"
+ALERTE = "#e8a328"
 
 COULEURS_FEU = {VERT: "#2eae5c", ORANGE: "#e8a328", ROUGE: "#ce3f3c"}
 
@@ -116,6 +117,7 @@ class Fenetre:
             0, 0, 0, 0, outline=INTERVENTION, width=2.5, state="hidden")
 
         self.formes_feux = self.creer_les_feux()
+        self.formes_alertes = self.creer_les_alertes()
         self.formes_vehicules = []
 
         self.etiquette_bas = self.toile.create_text(
@@ -163,7 +165,8 @@ class Fenetre:
         self.case_priorite = tk.IntVar(value=1)
         tk.Checkbutton(barre, text="Priorite aux feux",
                        variable=self.case_priorite,
-                       command=self.changer_priorite).pack(side="left", padx=10)
+                       command=self.changer_priorite
+                       ).pack(side="left", padx=10)
 
     def construire_la_legende(self):
         barre = tk.Frame(self.racine)
@@ -379,6 +382,25 @@ class Fenetre:
                     fill=COULEURS_FEU[ROUGE], outline="#282828")
         return formes
 
+    def creer_les_alertes(self):
+        formes = {}
+        for nom in ville.CARREFOURS:
+            x, y = en_pixels(ville.position(nom))
+            rayon = code_route.rayon_du_carrefour(nom) * ECHELLE + 6
+            formes[nom] = self.toile.create_oval(
+                x - rayon, y - rayon, x + rayon, y + rayon,
+                outline=ALERTE, width=2.0, dash=(4, 4), state="hidden")
+        return formes
+
+    def rafraichir_les_alertes(self):
+        alertes = self.simulation.carrefours_alertes
+        for nom in self.formes_alertes:
+            if nom in alertes:
+                etat = "normal"
+            else:
+                etat = "hidden"
+            self.toile.itemconfigure(self.formes_alertes[nom], state=etat)
+
     def battement(self):
         if self.moteur is None:
             for i in range(self.facteur):
@@ -390,6 +412,7 @@ class Fenetre:
     def rafraichir(self):
         with self.verrou:
             self.rafraichir_les_feux()
+            self.rafraichir_les_alertes()
             self.rafraichir_les_vehicules()
             self.rafraichir_l_appel()
             self.rafraichir_l_intervention()

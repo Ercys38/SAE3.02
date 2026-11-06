@@ -1,5 +1,8 @@
 # Aucune dependance exterieure : tout vient de la bibliotheque standard
-# de Python (tkinter, threading, queue, sqlite3, json, unittest).
+# de Python (tkinter, threading, queue, socket, json, sqlite3, unittest).
 #
 # Sous Debian, tkinter est dans un paquet separe :
 #   sudo apt install python3-tk
+#
+# Il n'y a donc rien a installer avec pip et pas d'environnement virtuel
+# a creer. Ce fichier est present pour montrer que c'est voulu.

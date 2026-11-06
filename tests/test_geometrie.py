@@ -29,9 +29,9 @@ def projeter(centre, avant, cote, axe):
     return (milieu - rayon, milieu + rayon)
 
 
-def se_chevauchent(a, b):
-    centre_a, avant_a, cote_a = a
-    centre_b, avant_b, cote_b = b
+def se_chevauchent(premiere, seconde):
+    centre_a, avant_a, cote_a = premiere
+    centre_b, avant_b, cote_b = seconde
 
     for axe in (avant_a, cote_a, avant_b, cote_b):
         a_min, a_max = projeter(centre_a, avant_a, cote_a, axe)
@@ -41,18 +41,23 @@ def se_chevauchent(a, b):
     return True
 
 
+def lancer_un_secours_au_demarrage(simulation):
+    for i in range(int(20 / PAS)):
+        simulation.avancer(PAS)
+
+    appele = None
+    while appele is None:
+        simulation.avancer(PAS)
+        appele = simulation.lancer_un_secours()
+
+
 def compter_les_chevauchements(densite, duree=DUREE, graine=3, secours=False):
     random.seed(graine)
     simulation = Simulation()
     simulation.densite = densite
 
     if secours:
-        for i in range(int(20 / PAS)):
-            simulation.avancer(PAS)
-        appele = None
-        while appele is None:
-            simulation.avancer(PAS)
-            appele = simulation.lancer_un_secours()
+        lancer_un_secours_au_demarrage(simulation)
 
     total = 0
     portee = LONGUEUR + LARGEUR
@@ -91,7 +96,3 @@ class TestGeometrie(unittest.TestCase):
                                                        graine=graine,
                                                        secours=True)
                     self.assertEqual(total, 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

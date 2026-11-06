@@ -23,12 +23,14 @@ def traverser(priorite, graine, densite):
     vehicule = None
     while vehicule is None:
         simulation.avancer(PAS)
-        vehicule = simulation.lancer_un_secours(itineraire=ITINERAIRE)
+        vehicule = simulation.lancer_un_secours(service="pompiers",
+                                                itineraire=ITINERAIRE)
 
     for i in range(int(400 / PAS)):
         simulation.avancer(PAS)
         if vehicule.sorti:
             break
+
     return vehicule.temps_de_trajet
 
 
@@ -38,6 +40,36 @@ class TestSecours(unittest.TestCase):
         secours = Secours("O", "C1")
         self.assertTrue(secours.prioritaire)
         self.assertGreater(secours.vitesse_max, VITESSE_AVENUE)
+
+    def test_chaque_service_part_de_son_batiment(self):
+        for service in ("pompiers", "samu", "police"):
+            with self.subTest(service=service):
+                random.seed(1)
+                simulation = Simulation()
+                vehicule = simulation.lancer_un_secours(service)
+                self.assertIsNotNone(vehicule)
+                self.assertEqual(vehicule.service, service)
+
+                batiments = ville.batiments_du_service(service)
+                acces = ville.BATIMENTS[batiments[0]]["acces"]
+                self.assertEqual(vehicule.depuis, acces)
+                self.assertEqual(vehicule.itineraire[0], acces)
+                self.assertEqual(vehicule.itineraire[-1],
+                                 vehicule.destination)
+
+    def test_le_secours_arrive_sur_le_lieu_d_intervention(self):
+        random.seed(2)
+        simulation = Simulation()
+        simulation.densite = 20
+        vehicule = simulation.lancer_un_secours("samu")
+
+        for i in range(int(400 / PAS)):
+            simulation.avancer(PAS)
+            if vehicule.arrive:
+                break
+
+        self.assertTrue(vehicule.arrive)
+        self.assertGreater(vehicule.temps_de_trajet, 0)
 
     def test_le_secours_peut_tourner(self):
         random.seed(1)
@@ -72,6 +104,7 @@ class TestSecours(unittest.TestCase):
 
         for i in range(int(DUREE_ORANGE / PAS) + 2):
             feu.avancer(PAS)
+
         self.assertEqual(feu.axe_passant, "vertical")
         self.assertEqual(feu.etat, VERT)
 
@@ -88,7 +121,3 @@ class TestSecours(unittest.TestCase):
 
     def test_sans_trafic_le_secours_ne_s_arrete_pas(self):
         self.assertLess(traverser(True, 7, 0), traverser(False, 7, 0) + 0.1)
-
-
-if __name__ == "__main__":
-    unittest.main()

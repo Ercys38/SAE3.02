@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white">
   <img src="https://img.shields.io/badge/d%C3%A9pendances-aucune-success">
   <img src="https://img.shields.io/badge/interface-tkinter-informational">
-  <img src="https://img.shields.io/badge/base-SQLite-003B57?logo=sqlite&logoColor=white">
+  <img src="https://img.shields.io/badge/base-MariaDB-003545?logo=mariadb&logoColor=white">
   <img src="https://img.shields.io/badge/r%C3%A9seau-TCP%2FJSON-orange">
 </p>
 
@@ -90,12 +90,14 @@ messages passent alors par une socket TCP, une ligne de JSON par message.
 ```mermaid
 flowchart LR
     subgraph VM1["VM 1"]
-        S["serveur.py<br/>superviseur + SQLite"]
+        S["serveur.py<br/>superviseur"]
+        D[("MariaDB<br/>sae302")]
+        S --- D
     end
     subgraph VM2["VM 2"]
         M["main.py<br/>simulation + fenêtre"]
     end
-    M -->|"position, libération"| S
+    M -->|"position, libération,<br/>intervention"| S
     S -->|"accord, alerte"| M
 ```
 
@@ -103,17 +105,28 @@ flowchart LR
 # sur la VM qui héberge le superviseur
 python3 serveur.py
 
-# sur la VM qui héberge la simulation, avec l'adresse de la première
-python3 main.py 192.168.x.y
+# sur la VM qui héberge la simulation
+python3 main.py
 ```
 
-Les deux VM doivent être en réseau interne ou en pont dans VirtualBox, pas en
-NAT simple. Sans argument, `main.py` garde tout en local.
+Il n'y a aucune adresse à taper. Au démarrage, la simulation diffuse une
+question en UDP sur le réseau local, le superviseur répond avec son port, et
+la connexion se fait toute seule : les adresses peuvent changer d'un jour à
+l'autre sans rien reconfigurer. Si personne ne répond au bout de trois
+secondes, la simulation démarre son propre superviseur en local plutôt que de
+s'arrêter.
+
+`python3 main.py local` force le mode local, et `python3 main.py 192.168.1.20`
+force une adresse si la diffusion est bloquée.
+
+Les deux VM doivent être en réseau interne ou en accès par pont dans
+VirtualBox : la diffusion UDP ne traverse pas le NAT.
 
 ## Les messages
 
 Chaque message porte son type, l'identifiant de l'émetteur, l'heure et un
-contenu.
+contenu. Les cinq premiers types sont ceux du cahier des charges, les deux
+derniers servent à l'écriture en base.
 
 ```json
 {"type": "accord_priorite", "emetteur": "superviseur",
@@ -128,21 +141,49 @@ contenu.
 | `accord_priorite` | superviseur → carrefour | le vert est accordé sur cet axe |
 | `alerte_proximite` | superviseur → véhicules | un secours arrive à moins de 500 m |
 | `liberation` | véhicule → superviseur | le carrefour est rendu |
+| `debut_intervention` | simulation → superviseur | ouvrir la ligne en base |
+| `fin_intervention` | simulation → superviseur | y inscrire le temps réalisé |
 
 ## La base
 
-`historique.db` se crée toute seule à la racine. Une table `interventions` :
-date, densité, service, départ, arrivée, temps avec le dispositif, temps sans.
+Les interventions sont enregistrées dans MariaDB, sur la machine du
+superviseur. La simulation n'écrit jamais dans la base : elle envoie
+`debut_intervention` quand on appelle un service et `fin_intervention` quand
+le véhicule arrive, et c'est le superviseur qui insère puis complète la ligne.
+
+Installation, sur la machine du superviseur :
 
 ```bash
-python3 -c "
-from simulation.journal import Journal
-j = Journal()
-for ligne in j.dernieres():
-    print(ligne)
-print('gain moyen', j.gain_moyen(), 's')
-"
+sudo apt install -y mariadb-server python3-pymysql
+sudo systemctl enable --now mariadb
 ```
+
+puis, dans `sudo mariadb` :
+
+```sql
+CREATE DATABASE IF NOT EXISTS sae302 CHARACTER SET utf8mb4;
+CREATE USER IF NOT EXISTS 'sae'@'localhost' IDENTIFIED BY 'sae';
+GRANT ALL PRIVILEGES ON sae302.* TO 'sae'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+La table `interventions` garde la date, la densité, le service, le départ,
+l'arrivée, le temps avec le dispositif et le temps sans. Les identifiants de
+connexion se changent par les variables d'environnement `SAE_DB_HOTE`,
+`SAE_DB_UTILISATEUR`, `SAE_DB_MOT_DE_PASSE` et `SAE_DB_NOM`.
+
+Si MariaDB n'est pas joignable, le programme le dit et bascule sur un fichier
+SQLite local. C'est un filet de sécurité pour la démonstration, pas le mode
+nominal.
+
+Pour relire l'historique :
+
+```bash
+python3 historique.py
+```
+
+Chaque trajet s'affiche sur une ligne avec sa densité, son service, son
+parcours, les deux temps et le gain, et la moyenne en bas.
 
 ## Le code
 
@@ -162,7 +203,8 @@ print('gain moyen', j.gain_moyen(), 's')
 | `simulation/superviseur.py` | le poste central |
 | `simulation/moteur.py` | le thread qui fait avancer le trafic |
 | `simulation/reseau.py` | le serveur TCP et son client |
-| `simulation/journal.py` | la base SQLite |
+| `simulation/journal.py` | la base MariaDB, et le repli SQLite |
+| `historique.py` | affiche les interventions enregistrées |
 
 PEP 8, noms et commentaires en français, aucune dépendance extérieure.
 

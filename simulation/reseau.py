@@ -1,12 +1,17 @@
 import queue
 import socket
 import threading
+import time
 
 from . import messages
 
 PORT = 9009
+PORT_DECOUVERTE = 9010
+APPEL = b"SAE302 qui est le superviseur"
+REPONSE = b"SAE302 superviseur "
 TAILLE = 4096
 ATTENTE = 0.05
+DELAI_DECOUVERTE = 3.0
 
 
 def envoyer_une_ligne(prise, message):
@@ -115,6 +120,7 @@ class ClientSuperviseur:
         self.recus = queue.Queue()
         self.envoyes = 0
         self.actif = True
+        self.compteur = 0
 
         self.fil = threading.Thread(target=self.ecouter, name="ecoute",
                                     daemon=True)
@@ -153,15 +159,18 @@ class ClientSuperviseur:
                 self.feux[carrefour].priorite = None
 
     def ouvrir_une_intervention(self, densite, service, depart, arrivee):
-        if self.journal is None:
-            return None
-        return self.journal.enregistrer(densite, service, depart, arrivee)
+        self.compteur = self.compteur + 1
+        reference = "s" + str(self.compteur)
+        self.envoyer(messages.debut_intervention(reference, densite, service,
+                                                 depart, arrivee))
+        return reference
 
-    def fermer_une_intervention(self, identifiant, temps_avec=None,
+    def fermer_une_intervention(self, reference, temps_avec=None,
                                 temps_sans=None):
-        if self.journal is None or identifiant is None:
+        if reference is None:
             return
-        self.journal.completer(identifiant, temps_avec, temps_sans)
+        self.envoyer(messages.fin_intervention(reference, temps_avec,
+                                               temps_sans))
 
     def demarrer(self):
         return
@@ -175,3 +184,83 @@ class ClientSuperviseur:
         if self.fil is not None:
             self.fil.join(timeout=1.0)
             self.fil = None
+
+
+class Annonceur:
+    """Repond aux clients qui cherchent le superviseur sur le reseau local."""
+
+    def __init__(self, port_du_serveur=PORT, port=PORT_DECOUVERTE):
+        self.port_du_serveur = port_du_serveur
+        self.port = port
+        self.prise = None
+        self.actif = False
+        self.fil = None
+        self.demandes = 0
+
+    def demarrer(self):
+        self.prise = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.prise.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.prise.bind(("", self.port))
+        self.prise.settimeout(0.5)
+
+        self.actif = True
+        self.fil = threading.Thread(target=self.tourner, name="annonce",
+                                    daemon=True)
+        self.fil.start()
+
+    def tourner(self):
+        reponse = REPONSE + str(self.port_du_serveur).encode("utf-8")
+
+        while self.actif:
+            try:
+                question, adresse = self.prise.recvfrom(TAILLE)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+
+            if question.strip() == APPEL:
+                self.demandes = self.demandes + 1
+                self.prise.sendto(reponse, adresse)
+
+    def arreter(self):
+        self.actif = False
+        if self.prise is not None:
+            self.prise.close()
+            self.prise = None
+        if self.fil is not None:
+            self.fil.join(timeout=1.0)
+            self.fil = None
+
+
+def trouver_le_superviseur(delai=DELAI_DECOUVERTE, port=PORT_DECOUVERTE):
+    """Cherche le superviseur en diffusion et rend (adresse, port)."""
+    prise = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    prise.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    prise.settimeout(0.5)
+
+    fin = time.monotonic() + delai
+    try:
+        while time.monotonic() < fin:
+            for cible in ("255.255.255.255", "127.0.0.1"):
+                try:
+                    prise.sendto(APPEL, (cible, port))
+                except OSError:
+                    continue
+
+            try:
+                reponse, adresse = prise.recvfrom(TAILLE)
+            except socket.timeout:
+                continue
+
+            if not reponse.startswith(REPONSE):
+                continue
+
+            texte = reponse[len(REPONSE):].decode("utf-8").strip()
+            if texte.isdigit():
+                return (adresse[0], int(texte))
+            return (adresse[0], PORT)
+    finally:
+        prise.close()
+
+    return None

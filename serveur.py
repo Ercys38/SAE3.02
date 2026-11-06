@@ -1,8 +1,8 @@
 import sys
 import time
 
-from simulation.journal import Journal
-from simulation.reseau import Serveur, PORT
+from simulation.journal import ouvrir_un_journal
+from simulation.reseau import Serveur, Annonceur, PORT
 from simulation.superviseur import Superviseur
 
 
@@ -11,23 +11,31 @@ def main():
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
 
-    journal = Journal()
+    journal = ouvrir_un_journal()
     superviseur = Superviseur(journal=journal)
     serveur = Serveur(superviseur, port=port)
+    annonceur = Annonceur(port_du_serveur=port)
 
     superviseur.demarrer()
     serveur.demarrer()
+    annonceur.demarrer()
+    print("base :", journal.nom)
     print("superviseur en ecoute sur le port", port)
+    print("annonce sur le reseau local, les clients le trouveront seuls")
 
     try:
         while True:
             time.sleep(1)
             print("clients :", serveur.clients,
                   "| messages recus :", superviseur.recus,
-                  "| carrefours prioritaires :", sorted(superviseur.priorites))
+                  "| interventions en base :",
+                  journal.nombre_d_interventions(),
+                  "| carrefours prioritaires :",
+                  sorted(superviseur.priorites))
     except KeyboardInterrupt:
         print()
     finally:
+        annonceur.arreter()
         serveur.arreter()
         superviseur.arreter()
         journal.fermer()

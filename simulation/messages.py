@@ -6,9 +6,11 @@ DEMANDE_PRIORITE = "demande_priorite"
 ACCORD_PRIORITE = "accord_priorite"
 ALERTE_PROXIMITE = "alerte_proximite"
 LIBERATION = "liberation"
+DEBUT_INTERVENTION = "debut_intervention"
+FIN_INTERVENTION = "fin_intervention"
 
 TYPES = (POSITION, DEMANDE_PRIORITE, ACCORD_PRIORITE, ALERTE_PROXIMITE,
-         LIBERATION)
+         LIBERATION, DEBUT_INTERVENTION, FIN_INTERVENTION)
 
 CHAMPS = ("type", "emetteur", "heure", "contenu")
 
@@ -73,3 +75,19 @@ def alerte_proximite(carrefour, axe, distance):
 
 def liberation(vehicule, carrefour):
     return creer(LIBERATION, vehicule.id, {"carrefour": carrefour})
+
+
+def debut_intervention(reference, densite, service, depart, arrivee):
+    return creer(DEBUT_INTERVENTION, "simulation",
+                 {"reference": reference,
+                  "densite": densite,
+                  "service": service,
+                  "depart": depart,
+                  "arrivee": arrivee})
+
+
+def fin_intervention(reference, temps_avec=None, temps_sans=None):
+    return creer(FIN_INTERVENTION, "simulation",
+                 {"reference": reference,
+                  "temps_avec": temps_avec,
+                  "temps_sans": temps_sans})

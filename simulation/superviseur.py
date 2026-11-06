@@ -22,6 +22,7 @@ class Superviseur:
 
         self.priorites = {}
         self.alertes = {}
+        self.interventions = {}
         self.recus = 0
         self.envoyes = 0
 
@@ -55,6 +56,10 @@ class Superviseur:
                           contenu["axe"])
         elif genre == messages.LIBERATION:
             self.liberer(message["emetteur"], contenu["carrefour"])
+        elif genre == messages.DEBUT_INTERVENTION:
+            self.noter_un_debut(contenu)
+        elif genre == messages.FIN_INTERVENTION:
+            self.noter_une_fin(contenu)
 
     def traiter_une_position(self, emetteur, contenu):
         carrefour = contenu["carrefour"]
@@ -112,6 +117,18 @@ class Superviseur:
                                          {"carrefour": carrefour}))
         self.priorites.clear()
         self.alertes.clear()
+
+    def noter_un_debut(self, contenu):
+        identifiant = self.ouvrir_une_intervention(
+            contenu["densite"], contenu["service"], contenu["depart"],
+            contenu["arrivee"])
+        if identifiant is not None:
+            self.interventions[contenu["reference"]] = identifiant
+
+    def noter_une_fin(self, contenu):
+        identifiant = self.interventions.pop(contenu["reference"], None)
+        self.fermer_une_intervention(identifiant, contenu.get("temps_avec"),
+                                     contenu.get("temps_sans"))
 
     def ouvrir_une_intervention(self, densite, service, depart, arrivee):
         if self.journal is None:

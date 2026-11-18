@@ -49,13 +49,19 @@ files, avec le dispositif son temps bouge à peine quelle que soit la densité.
 ## Démarrage
 
 ```bash
+git clone https://github.com/Ercys38/SAE3.02.git
+cd SAE3.02
 sudo apt install python3-tk     # Debian, tkinter est dans un paquet séparé
-python3 main.py
+python3 main.py local
 ```
 
 Aucune dépendance à installer, tout vient de la bibliothèque standard. Il faut
 un terminal ouvert dans la session graphique : en SSH ou en root, tkinter
 répond `no display name and no $DISPLAY`.
+
+La marche à suivre complète est dans
+[docs/installation.md](docs/installation.md), également en PDF dans
+[docs/installation.pdf](docs/installation.pdf).
 
 ## Ce que fait la maquette
 
@@ -182,6 +188,9 @@ parcours, les deux temps et le gain, et la moyenne en bas.
 | `simulation/reseau.py` | le serveur TCP et son client |
 | `simulation/journal.py` | la base SQLite |
 | `historique.py` | affiche les interventions enregistrées |
+| `docs/installation.md` | comment installer et lancer le projet |
+| `docs/demo.md` | déroulé de la démonstration |
+| `docs/ecarts.md` | écarts avec le cahier des charges |
 
 PEP 8, noms et commentaires en français, aucune dépendance extérieure.
 

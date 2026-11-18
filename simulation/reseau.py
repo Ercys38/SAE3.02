@@ -1,5 +1,6 @@
 import queue
 import socket
+import subprocess
 import threading
 import time
 
@@ -233,16 +234,38 @@ class Annonceur:
             self.fil = None
 
 
+def adresses_de_diffusion():
+    """Liste les adresses de diffusion des cartes de la machine."""
+    cibles = ["255.255.255.255", "127.0.0.1"]
+
+    try:
+        sortie = subprocess.run(["ip", "-o", "-4", "addr", "show"],
+                                capture_output=True, text=True, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        return cibles
+
+    for ligne in sortie.stdout.split("\n"):
+        morceaux = ligne.split()
+        if "brd" not in morceaux:
+            continue
+        diffusion = morceaux[morceaux.index("brd") + 1]
+        if diffusion not in cibles:
+            cibles.append(diffusion)
+
+    return cibles
+
+
 def trouver_le_superviseur(delai=DELAI_DECOUVERTE, port=PORT_DECOUVERTE):
     """Cherche le superviseur en diffusion et rend (adresse, port)."""
     prise = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     prise.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     prise.settimeout(0.5)
 
+    cibles = adresses_de_diffusion()
     fin = time.monotonic() + delai
     try:
         while time.monotonic() < fin:
-            for cible in ("255.255.255.255", "127.0.0.1"):
+            for cible in cibles:
                 try:
                     prise.sendto(APPEL, (cible, port))
                 except OSError:
